@@ -342,9 +342,14 @@ export async function saveEmail(db: D1Database, params: SaveEmailParams): Promis
       isRead: false,
     };
     
-    console.log('准备插入邮件:', email.id);
-    
-    await db.prepare(`INSERT INTO emails (id, mailbox_id, from_address, from_name, to_address, subject, text_content, html_content, received_at, has_attachments, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(email.id, email.mailboxId, email.fromAddress, email.fromName, email.toAddress, email.subject, email.textContent, email.htmlContent, email.receivedAt, email.hasAttachments ? 1 : 0, email.isRead ? 1 : 0).run();
+    console.log('解析后的邮件数据:', email);
+    try {
+      console.log('准备插入邮件:', email.id);
+      const savedEmail = await db.prepare(`INSERT INTO emails (id, mailbox_id, from_address, from_name, to_address, subject, text_content, html_content, received_at, has_attachments, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(email.id, email.mailboxId, email.fromAddress, email.fromName, email.toAddress, email.subject, email.textContent, email.htmlContent, email.receivedAt, email.hasAttachments ? 1 : 0, email.isRead ? 1 : 0).run();
+      console.log('存储成功:', savedEmail);
+    } catch (error) {
+      console.error('存储邮件时发生错误:', error);
+    }
     
     console.log('邮件保存成功:', email.id);
     
