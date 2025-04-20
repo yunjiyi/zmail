@@ -63,7 +63,7 @@ export async function createMailbox(db: D1Database, params: CreateMailboxParams)
   const now = getCurrentTimestamp();
   const mailbox: Mailbox = {
     id: generateId(),
-    address: params.address,
+    address: params.address.includes(domainSuffix) ? params.address : params.address + domainSuffix,
     createdAt: now,
     expiresAt: calculateExpiryTimestamp(params.expiresInHours),
     ipAddress: params.ipAddress,
