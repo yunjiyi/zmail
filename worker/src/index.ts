@@ -31,17 +31,17 @@ export default {
         );
       }
 
-      // 检查CORS
-      const origin = request.headers.get('Origin');
-      if (origin !== 'https://bb.606006.xyz' && origin !== 'http://192.9.151.222') {
-        return new Response('Forbidden', { status: 403 });
-      }
+      // 移除域名和IP限制
+      // const origin = request.headers.get('Origin');
+      // if (origin !== 'https://bb.606006.xyz' && origin !== 'http://192.9.151.222') {
+      //   return new Response('Forbidden', { status: 403 });
+      // }
 
       // 处理其他API请求
       const response = await app.fetch(request, env, ctx);
 
       // 设置CORS头
-      response.headers.set('Access-Control-Allow-Origin', origin || '');
+      response.headers.set('Access-Control-Allow-Origin', '*'); // 允许所有来源
       response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
 
