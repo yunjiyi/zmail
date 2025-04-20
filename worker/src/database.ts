@@ -83,7 +83,17 @@ export async function createMailbox(db: D1Database, params: CreateMailboxParams)
  */
 export async function getMailbox(db: D1Database, address: string): Promise<Mailbox | null> {
   const now = getCurrentTimestamp();
-  const result = await db.prepare(`SELECT id, address, created_at, expires_at, ip_address, last_accessed FROM mailboxes WHERE address = ? AND expires_at > ?`).bind(address, now).first();
+  console.log('正在查询邮箱:', address, '当前时间:', now);
+
+  // 查询数据库
+  const result = await db.prepare(`
+    SELECT id, address, created_at, expires_at, ip_address, last_accessed
+    FROM mailboxes
+    WHERE address = ? AND expires_at > ?
+  `).bind(address, now).first();
+
+  // 添加日志：记录查询结果
+  console.log('查询结果:', result);
   
   if (!result) return null;
   
