@@ -325,7 +325,7 @@ async function cleanupAttachments(db: D1Database, emailId: string): Promise<void
  */
 export async function saveEmail(db: D1Database, params: SaveEmailParams): Promise<Email> {
   try {
-    console.log('开始保存邮件...');
+    console.log('正在存储邮件:', params);
     
     const now = getCurrentTimestamp();
     const email: Email = {
@@ -346,7 +346,7 @@ export async function saveEmail(db: D1Database, params: SaveEmailParams): Promis
     try {
       console.log('准备插入邮件:', email.id);
       const savedEmail = await db.prepare(`INSERT INTO emails (id, mailbox_id, from_address, from_name, to_address, subject, text_content, html_content, received_at, has_attachments, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(email.id, email.mailboxId, email.fromAddress, email.fromName, email.toAddress, email.subject, email.textContent, email.htmlContent, email.receivedAt, email.hasAttachments ? 1 : 0, email.isRead ? 1 : 0).run();
-      console.log('存储成功:', savedEmail);
+      console.log('存储结果:', result);
     } catch (error) {
       console.error('存储邮件时发生错误:', error);
     }
