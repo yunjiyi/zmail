@@ -351,7 +351,8 @@ export async function saveEmail(db: D1Database, params: SaveEmailParams): Promis
       console.error('存储邮件时发生错误:', error);
     }
     
-    console.log('邮件保存成功:', email.id);
+    console.log('邮箱创建成功:', mailbox.id);
+    console.log('邮件存储成功:', email.id);
     
     return email;
   } catch (error) {
