@@ -113,20 +113,18 @@ app.delete('/api/mailboxes/:address', async (c) => {
 app.get('/api/mailboxes/:address/emails', async (c) => {
   try {
     const address = c.req.param('address');
-    const mailbox = await getMailbox(c.env.DB, address);
+    const emails = await getEmails(c.env.DB, address);
 
-    if (!mailbox) {
-      return c.json({ success: false, error: '邮箱不存在' }, 404);
+    if (!emails) {
+      return c.json({ success: false, error: '邮件不存在' }, 404);
     }
-
-    const emails = await getEmails(c.env.DB, mailbox.id);
 
     return c.json({ success: true, emails });
   } catch (error) {
-    console.error('获取邮件列表失败:', error);
+    console.error('获取邮件失败:', error);
     return c.json({
       success: false,
-      error: '获取邮件列表失败',
+      error: '获取邮件失败',
       message: error instanceof Error ? error.message : String(error)
     }, 500);
   }
