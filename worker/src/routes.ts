@@ -1,232 +1,77 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { Env } from './types';
-import {
-  createMailbox,
-  getMailbox,
-  deleteMailbox,
-  getEmails,
-  getEmail,
-  deleteEmail,
-  getAttachments,
-  getAttachment
-} from './database';
-import { generateRandomAddress } from './utils';
+import { initializeDatabase, cleanupExpiredMailboxes, cleanupExpiredMails, cleanupReadMails } from './database';
+import { handleEmail } from './email-handler';
+import app from './routes';
 
-// 创建 Hono 应用
-const app = new Hono<{ Bindings: Env }>();
-
-// 添加 CORS 中间件
-app.use('/*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type'],
-  maxAge: 86400,
-}));
-
-// 健康检查端点
-app.get('/', (c) => {
-  return c.json({ status: 'ok', message: '临时邮箱系统API正常运行' });
-});
-
-// 创建邮箱
-app.post('/api/mailboxes', async (c) => {
-  try {
-    const body = await c.req.json();
-
-    // 验证参数
-    if (body.address && typeof body.address !== 'string') {
-      return c.json({ success: false, error: '无效的邮箱地址' }, 400);
-    }
-
-    const expiresInHours = 24; // 固定24小时有效期
-
-    // 获取客户端IP
-    const ip = c.req.header('CF-Connecting-IP') || 'unknown';
-
-    // 生成或使用提供的地址
-    const address = body.address || generateRandomAddress();
-
-    // 检查邮箱是否已存在
-    const existingMailbox = await getMailbox(c.env.DB, address);
-    if (existingMailbox) {
-      return c.json({ success: false, error: '邮箱地址已存在' }, 400);
-    }
-
-    // 创建邮箱
-    const mailbox = await createMailbox(c.env.DB, {
-      address,
-      expiresInHours,
-      ipAddress: ip,
-    });
-
-    return c.json({ success: true, mailbox });
-  } catch (error) {
-    console.error('创建邮箱失败:', error);
-    return c.json({
-      success: false,
-      error: '创建邮箱失败',
-      message: error instanceof Error ? error.message : String(error)
-    }, 400);
-  }
-});
-
-// 获取邮箱信息
-app.get('/api/mailboxes/:address', async (c) => {
-  try {
-    const address = c.req.param('address');
-    const mailbox = await getMailbox(c.env.DB, address);
-
-    if (!mailbox) {
-      return c.json({ success: false, error: '邮箱不存在' }, 404);
-    }
-
-    return c.json({ success: true, mailbox });
-  } catch (error) {
-    console.error('获取邮箱失败:', error);
-    return c.json({
-      success: false,
-      error: '获取邮箱失败',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
-
-// 删除邮箱
-app.delete('/api/mailboxes/:address', async (c) => {
-  try {
-    const address = c.req.param('address');
-    await deleteMailbox(c.env.DB, address);
-
-    return c.json({ success: true });
-  } catch (error) {
-    console.error('删除邮箱失败:', error);
-    return c.json({
-      success: false,
-      error: '删除邮箱失败',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
-
-// 获取邮件列表
-app.get('/api/mailboxes/:address/emails', async (c) => {
-  try {
-    const address = c.req.param('address');
-    const emails = await getEmails(c.env.DB, address);
-
-    if (!emails) {
-      return c.json({ success: false, error: '邮件不存在' }, 404);
-    }
-
-    return c.json({ success: true, emails });
-  } catch (error) {
-    console.error('获取邮件失败:', error);
-    return c.json({
-      success: false,
-      error: '获取邮件失败',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
-
-// 获取邮件详情
-app.get('/api/emails/:id', async (c) => {
-  try {
-    const id = c.req.param('id');
-    const email = await getEmail(c.env.DB, id);
-    if (!email) {
-      return c.json({ success: false, error: '邮件不存在' }, 404);
-    }
-    return c.json({ success: true, email });
-  } catch (error) {
-    console.error('获取邮件详情失败:', error);
-    return c.json({ success: false, error: '获取邮件详情失败', message: error instanceof Error ? error.message : String(error) }, 500);
-  }
-});
-
-app.get('/api/emails/:id/attachments', async (c) => {
-  try {
-    const id = c.req.param('id');
-    const email = await getEmail(c.env.DB, id);
-    if (!email) {
-      return c.json({ success: false, error: '邮件不存在' }, 404);
-    }
-    const attachments = await getAttachments(c.env.DB, id);
-    return c.json({ success: true, attachments });
-  } catch (error) {
-    console.error('获取附件列表失败:', error);
-    return c.json({ success: false, error: '获取附件列表失败', message: error instanceof Error ? error.message : String(error) }, 500);
-  }
-});
-
-// 获取附件详情
-app.get('/api/attachments/:id', async (c) => {
-  try {
-    const id = c.req.param('id');
-    const attachment = await getAttachment(c.env.DB, id);
-
-    if (!attachment) {
-      return c.json({ success: false, error: '附件不存在' }, 404);
-    }
-
-    // 检查是否需要直接返回附件内容
-    const download = c.req.query('download') === 'true';
-
-    if (download) {
-      // 将Base64内容转换为二进制
-      const binaryContent = atob(attachment.content);
-      const bytes = new Uint8Array(binaryContent.length);
-      for (let i = 0; i < binaryContent.length; i++) {
-        bytes[i] = binaryContent.charCodeAt(i);
+// 导出Worker处理函数
+export default {
+  // 处理HTTP请求
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    
+    try {
+      // 自动初始化数据库（如果需要）
+      await initializeDatabase(env.DB);
+      
+      // 手动初始化数据库（如果请求中包含init参数）
+      if (url.searchParams.has('init')) {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: '数据库初始化成功' 
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
-      // 设置响应头
-      c.header('Content-Type', attachment.mimeType);
-      c.header('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.filename)}"`);
-
-      return c.body(bytes);
-    }
-
-    // 返回附件信息（不包含内容，避免响应过大）
-    return c.json({
-      success: true,
-      attachment: {
-        id: attachment.id,
-        emailId: attachment.emailId,
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        size: attachment.size,
-        createdAt: attachment.createdAt,
-        isLarge: attachment.isLarge,
-        chunksCount: attachment.chunksCount
+      // 添加 /api/debug/db 路径处理
+      if (url.pathname === '/api/debug/db') {
+        return new Response(JSON.stringify({
+          dbDefined: true,
+          dbType: 'object',
+          dbMethods: ['alwaysPrimarySession', 'fetcher'],
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
-    });
-  } catch (error) {
-    console.error('获取附件详情失败:', error);
-    return c.json({
-      success: false,
-      error: '获取附件详情失败',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
 
-// 删除邮件
-app.delete('/api/emails/:id', async (c) => {
-  try {
-    const id = c.req.param('id');
-    await deleteEmail(c.env.DB, id);
-
-    return c.json({ success: true });
-  } catch (error) {
-    console.error('删除邮件失败:', error);
-    return c.json({
-      success: false,
-      error: '删除邮件失败',
-      message: error instanceof Error ? error.message : String(error)
-    }, 500);
-  }
-});
-
-export default app;
+      // 处理其他API请求
+      return app.fetch(request, env, ctx);
+    } catch (error) {
+      console.error('请求处理失败:', error);
+      
+      // 返回详细的错误信息
+      return new Response(JSON.stringify({
+        success: false,
+        error: '服务器内部错误',
+        message: error instanceof Error ? error.message : String(error)
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  },
+  
+  // 处理邮件
+  async email(message: any, env: Env, ctx: ExecutionContext): Promise<void> {
+    try {
+      await handleEmail(message, env);
+    } catch (error) {
+      console.error('处理邮件失败:', error);
+      throw new Error(`Failed to process email: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  },
+  
+  // 定时任务 - 每小时清理过期邮箱以及过期邮件和已被阅读的邮件
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    try {
+      const deleted = await cleanupExpiredMailboxes(env.DB);
+      console.log(`已清理 ${deleted} 个过期邮箱`);
+      const deletedMail = await cleanupExpiredMails(env.DB);
+      console.log(`已清理 ${deletedMail} 个过期邮件`);
+      const deletedReadMail = await cleanupReadMails(env.DB);
+      console.log(`已清理 ${deletedReadMail} 个已被阅读的邮件`);
+    } catch (error) {
+      console.error('定时任务执行失败:', error);
+    }
+  },
+};
